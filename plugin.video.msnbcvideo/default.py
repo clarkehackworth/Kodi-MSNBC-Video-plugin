@@ -83,8 +83,11 @@ def playAll(slug,dataParam):
   
 
 def episodesArrayKey(item):
-    return datetime.datetime.strptime(item['pubDate'], '%m/%d/%y')
-    
+    try:
+        return datetime.datetime.strptime(item['pubDate'], '%m/%d/%y')
+     except :
+       return datetime.datetime.strptime('01/01/70', '%m/%d/%y')
+       
 def addEpisodes(slug,dataParam):       
   episodes = populateEpisodes(slug,dataParam)
   episodes = sorted(episodes, key=episodesArrayKey,reverse=True)
