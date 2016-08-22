@@ -104,7 +104,7 @@ def addEpisodes(slug,dataParam):
       addDir("Play "+ep['pubDate'],slug,4,json.dumps({'playlist':dataParam,'data':ep['pubDate']}),'')
       dateList.append(ep['pubDate'])
     #addDir("   "+ep['pubDate']+" - "+ep['title'],ep['title'],2,json.dumps(ep['sources'], sort_keys=False),ep['thumbnailURL']);
-    addDir("   "+ep['title'],ep['title'],3,json.dumps({'playlist':dataParam,'data':json.dumps(ep['sources'], sort_keys=False)}),ep['thumbnailURL']);
+    addDir("   "+ep['title']+" ("+ep['duration']+")",ep['title'],3,json.dumps({'playlist':dataParam,'data':json.dumps(ep['sources'], sort_keys=False)}),ep['thumbnailURL']);
                        
        
                        
@@ -123,6 +123,8 @@ def populateEpisodes(slug,dataParam):
     articles = playlistdata.findAll("article")
     
     for article in articles:
+      #print article
+      #print "-------------------------------"
       if article.find("div", attrs = {'class' : 'title'}).get_text() is not None:
         
         description = article.find("div", attrs = {'class' : 'description'}).get_text().encode('ascii', 'ignore')
@@ -131,6 +133,7 @@ def populateEpisodes(slug,dataParam):
         pubdate = article.find("div", attrs = {'class' : 'datetime'}).get_text()
         sources = [{'type':1,'source':article.find(lambda tag: tag.name == 'div' and 'data-address' in tag.attrs)['data-address']}]
         guid = article.find(lambda tag: tag.name == 'a' and 'data-ng-attr-guid' in tag.attrs)['data-ng-attr-guid']
+        duration = article.find("div", attrs = {'class' : 'duration'}).get_text().replace("Duration: ","")
 
         #print "found article "+description +" - "+title+" - "+thumbnail+" - "+pubdate+" - "+str(sources)+" - "+guid
 
@@ -140,6 +143,7 @@ def populateEpisodes(slug,dataParam):
          'sources': sources,
          'title': title ,
          'guid' : guid,
+         'duration': duration,
 			   #'rawdate': 
                   };
         for gepisode in googleEpisodeList:
