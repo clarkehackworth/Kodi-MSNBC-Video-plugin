@@ -9,7 +9,7 @@ __plugin__ = "MSNBC Videos"
 __author__ = 'Clarke Hackworth <clarke.hackworth@gmail.com>'
 __url__ = ''
 __date__ = ''
-__version__ = '0.1.6'
+__version__ = '0.1.7'
 UTF8 = 'utf-8'
 
 autoPlay = True
@@ -60,13 +60,17 @@ def addShows():
   for show in shows:	
     addDir(show['title'],show['slug'],1,'',show['logoPathURL'])
 
-def playAll(slug,dataParam):       
-  episodes = populateEpisodes(slug,dataParam)
+def playAll(slug,dataParam):   
+  dataObj = json.loads(dataParam)
+  playlist = dataObj['playlist']
+  pubdate = dataObj['data']
+  
+  episodes = populateEpisodes(slug,playlist)
   episodes = sorted(episodes, key=episodesArrayKey,reverse=True)
   pl=xbmc.PlayList(1)
   pl.clear()
   for ep in episodes:
-    if ep['pubDate'] == dataParam:
+    if ep['pubDate'] == pubdate:
       sources = populateSources(slug,json.dumps(ep['sources']))
       sources = sorted(sources, key=sourcesArrayKey,reverse=True)
       #print sources[0]
@@ -97,70 +101,54 @@ def addEpisodes(slug,dataParam):
   dateList = []
   for ep in episodes:
     if ep['pubDate'] not in dateList:
-      addDir("Play "+ep['pubDate'],slug,3,ep['pubDate'],'')
+      addDir("Play "+ep['pubDate'],slug,4,json.dumps({'playlist':dataParam,'data':ep['pubDate']}),'')
       dateList.append(ep['pubDate'])
     #addDir("   "+ep['pubDate']+" - "+ep['title'],ep['title'],2,json.dumps(ep['sources'], sort_keys=False),ep['thumbnailURL']);
-    addDir("   "+ep['title'],ep['title'],2,json.dumps(ep['sources'], sort_keys=False),ep['thumbnailURL']);
+    addDir("   "+ep['title'],ep['title'],3,json.dumps({'playlist':dataParam,'data':json.dumps(ep['sources'], sort_keys=False)}),ep['thumbnailURL']);
+                       
+       
                        
 def populateEpisodes(slug,dataParam):
   print "pop eps: "+slug+" - "+str(dataParam)
   episodeListArray = []
   googleEpisodeList = populateGoogleEpisodes(slug,1)
   
-  url = "http://www.msnbc.com/"+slug
-  data = getURL(url)
   
-  #remove the following line from input as it messes with some older versions of Beautiful Soup
-  #document.write('<scr'+'ipt id="mps-ext-load" src="//'+mpsopts.host+'/fetch/ext/load-'+mpscall.site+'.js"></scr'+'ipt>');
-  data = re.sub(r"document\.write(.*);", "", data)
-  
-  showssoup = BeautifulSoup(data)
-  scripts = showssoup.findAll("script")
-  jsontext = ""
-  for script in scripts:
-    text = script.get_text().strip()
-    if text.startswith("jQuery.extend(Drupal.settings,"):
-      jsontext = text.replace("jQuery.extend(Drupal.settings,","").replace(");","")
-  pageData = json.loads(jsontext)
-  
-  
-  if pageData['pub_news_show'] and pageData['pub_news_show']['playlists']:
-    print pageData['pub_news_show']['playlists'][0]['guid']
-    videorawdata = getURL("http://www.msnbc.com/api/1.0/getplaylistcarousel/vertical/"+pageData['pub_news_show']['playlists'][0]['guid']+".json")
-    videojsondata = json.loads(videorawdata)
+  videorawdata = getURL("http://www.msnbc.com/api/1.0/getplaylistcarousel/vertical/"+dataParam+".json")
+  videojsondata = json.loads(videorawdata)
    
-    if videojsondata['carousel']:
-      #print videojsondata['carousel'][0]['item']
-      playlistdata = BeautifulSoup(videojsondata['carousel'][0]['item'])
-      articles = playlistdata.findAll("article")
-      print "articles len: "+str(len(articles))
-      for article in articles:
-        if article.find("div", attrs = {'class' : 'title'}).get_text() is not None:
-          
-          description = article.find("div", attrs = {'class' : 'description'}).get_text().encode('ascii', 'ignore')
-          title = article.find("div", attrs = {'class' : 'title'}).get_text()
-          thumbnail = article.find('img')['src']
-          pubdate = article.find("div", attrs = {'class' : 'datetime'}).get_text()
-          sources = [{'type':1,'source':article.find(lambda tag: tag.name == 'div' and 'data-address' in tag.attrs)['data-address']}]
-          guid = article.find(lambda tag: tag.name == 'a' and 'data-ng-attr-guid' in tag.attrs)['data-ng-attr-guid']
+  if videojsondata['carousel']:
+    #print videojsondata['carousel'][0]['item']
+    playlistdata = BeautifulSoup(videojsondata['carousel'][0]['item'])
+    articles = playlistdata.findAll("article")
+    
+    for article in articles:
+      if article.find("div", attrs = {'class' : 'title'}).get_text() is not None:
+        
+        description = article.find("div", attrs = {'class' : 'description'}).get_text().encode('ascii', 'ignore')
+        title = article.find("div", attrs = {'class' : 'title'}).get_text()
+        thumbnail = article.find('img')['src']
+        pubdate = article.find("div", attrs = {'class' : 'datetime'}).get_text()
+        sources = [{'type':1,'source':article.find(lambda tag: tag.name == 'div' and 'data-address' in tag.attrs)['data-address']}]
+        guid = article.find(lambda tag: tag.name == 'a' and 'data-ng-attr-guid' in tag.attrs)['data-ng-attr-guid']
 
-          #print "found article "+description +" - "+title+" - "+thumbnail+" - "+pubdate+" - "+str(sources)+" - "+guid
+        #print "found article "+description +" - "+title+" - "+thumbnail+" - "+pubdate+" - "+str(sources)+" - "+guid
 
-          episode = {'description': description,
-		       'thumbnailURL': thumbnail,
-		       'pubDate': pubdate,
-		       'sources': sources,
-           'title': title ,
-           'guid' : guid,
-			     #'rawdate': 
-                   };
-          for gepisode in googleEpisodeList:
-            if episode['guid'] == gepisode['guid']:
-              googleEpisodeList.remove(gepisode)
-              episode['thumbnailURL'] = gepisode['thumbnailURL']
-              #episode['sources'].append({'type':2,'source':gepisode['source']})
-              #print "added source "+gepisode['source']+" on "+episode['guid'] 
-          episodeListArray.append(episode)	
+        episode = {'description': description,
+         'thumbnailURL': thumbnail,
+         'pubDate': pubdate,
+         'sources': sources,
+         'title': title ,
+         'guid' : guid,
+			   #'rawdate': 
+                  };
+        for gepisode in googleEpisodeList:
+          if episode['guid'] == gepisode['guid']:
+            googleEpisodeList.remove(gepisode)
+            episode['thumbnailURL'] = gepisode['thumbnailURL']
+            #episode['sources'].append({'type':2,'source':gepisode['source']})
+            #print "added source "+gepisode['source']+" on "+episode['guid'] 
+        episodeListArray.append(episode)	
         
   else:
     raise Exception('pub_news_show first_playlist_html not found')
@@ -198,11 +186,48 @@ def populateGoogleEpisodes(slug,page):
         
   return episodeListArray;
 
+def addPlaylists(slug,dataParam):       
+  playlists = populatePlaylists(slug,dataParam)
+  
+  for pl in playlists:
+    addDir(pl['name'],pl['name'],2,pl['guid'],"DefaultFolder.png");
+                       
+
+def populatePlaylists(slug,dataParam):    
+  print "pop playlists: "+slug+" - "+str(dataParam)   
+  playlists = []
+  
+  url = "http://www.msnbc.com/"+slug
+  data = getURL(url)
+  
+  #remove the following line from input as it messes with some older versions of Beautiful Soup
+  #document.write('<scr'+'ipt id="mps-ext-load" src="//'+mpsopts.host+'/fetch/ext/load-'+mpscall.site+'.js"></scr'+'ipt>');
+  data = re.sub(r"document\.write(.*);", "", data)
+  
+  showssoup = BeautifulSoup(data)
+  scripts = showssoup.findAll("script")
+  jsontext = ""
+  for script in scripts:
+    text = script.get_text().strip()
+    if text.startswith("jQuery.extend(Drupal.settings,"):
+      jsontext = text.replace("jQuery.extend(Drupal.settings,","").replace(");","")
+  pageData = json.loads(jsontext)
+  
+  
+  if pageData['pub_news_show'] and pageData['pub_news_show']['playlists']:
+    for plist in pageData['pub_news_show']['playlists']:
+      playlists.append({'name':plist['name'],'guid':plist['guid']})
+  return playlists
+
 def sourcesArrayKey(item):
     return int(item['res'])
     
 def addSources(slug,dataParam):
-  sources = populateSources(slug,dataParam)
+  dataObj = json.loads(dataParam)
+  playlist = dataObj['playlist']
+  data = dataObj['data']
+  
+  sources = populateSources(slug,data)
   sources = sorted(sources, key=sourcesArrayKey,reverse=True)
   for src in sources:	
     if int(src['res'])>=720:
@@ -361,17 +386,23 @@ if mode==None or url==None or len(url)<1:
 
 elif mode==1:
   #logging.debug("url:"+url+",mode:"+str(mode))
-  addEpisodes(url,data)
+  addPlaylists(url,data)
   xbmcplugin.endOfDirectory(int(sys.argv[1]))
 
 elif mode==2:
+  #logging.debug("url:"+url+",mode:"+str(mode))
+  addEpisodes(url,data)
+  xbmcplugin.endOfDirectory(int(sys.argv[1]))
+
+
+elif mode==3:
   #logging.debug("url:"+url+",mode:"+str(mode))
   if data is not None:
     #logging.debug("data:"+data)
     addSources(url,data)
   xbmcplugin.endOfDirectory(int(sys.argv[1]))
 
-elif mode==3:
+elif mode==4:
   #logging.debug("url:"+url+",mode:"+str(mode))
   playAll(url,data)
   xbmcplugin.endOfDirectory(int(sys.argv[1]))
