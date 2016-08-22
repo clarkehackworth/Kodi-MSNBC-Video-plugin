@@ -9,7 +9,7 @@ __plugin__ = "MSNBC Videos"
 __author__ = 'Clarke Hackworth <clarke.hackworth@gmail.com>'
 __url__ = ''
 __date__ = ''
-__version__ = '0.1.5'
+__version__ = '0.1.6'
 UTF8 = 'utf-8'
 
 autoPlay = True
@@ -69,6 +69,9 @@ def playAll(slug,dataParam):
     if ep['pubDate'] == dataParam:
       sources = populateSources(slug,json.dumps(ep['sources']))
       sources = sorted(sources, key=sourcesArrayKey,reverse=True)
+      #print sources[0]
+     
+      ##listitem = xbmcgui.ListItem(ep['title'],iconImage=ep['thumbnailURL'])
       url = sources[0]['url']
       
       icon = "DefaultVideoPlaylists.png"
@@ -84,10 +87,10 @@ def playAll(slug,dataParam):
 
 def episodesArrayKey(item):
     try:
-        return datetime.datetime.strptime(item['pubDate'], '%m/%d/%y')
-     except :
+       return datetime.datetime.strptime(item['pubDate'], '%m/%d/%y')
+    except :
        return datetime.datetime.strptime('01/01/70', '%m/%d/%y')
-       
+    
 def addEpisodes(slug,dataParam):       
   episodes = populateEpisodes(slug,dataParam)
   episodes = sorted(episodes, key=episodesArrayKey,reverse=True)
@@ -96,7 +99,8 @@ def addEpisodes(slug,dataParam):
     if ep['pubDate'] not in dateList:
       addDir("Play "+ep['pubDate'],slug,3,ep['pubDate'],'')
       dateList.append(ep['pubDate'])
-    addDir("   "+ep['title'],ep['title'],2,json.dumps(ep['sources'], sort_keys=False),ep['thumbnailURL'],ep['description']);
+    #addDir("   "+ep['pubDate']+" - "+ep['title'],ep['title'],2,json.dumps(ep['sources'], sort_keys=False),ep['thumbnailURL']);
+    addDir("   "+ep['title'],ep['title'],2,json.dumps(ep['sources'], sort_keys=False),ep['thumbnailURL']);
                        
 def populateEpisodes(slug,dataParam):
   print "pop eps: "+slug+" - "+str(dataParam)
@@ -118,30 +122,49 @@ def populateEpisodes(slug,dataParam):
     if text.startswith("jQuery.extend(Drupal.settings,"):
       jsontext = text.replace("jQuery.extend(Drupal.settings,","").replace(");","")
   pageData = json.loads(jsontext)
-  if pageData['pub_news_show'] and pageData['pub_news_show']['first_playlist_html']:
-    playList = BeautifulSoup(pageData['pub_news_show']['first_playlist_html'])
-    #print playList
-    articles = playList.findAll("article")
-    for article in articles:
-      #print article.find(lambda tag: tag.name == 'a' and 'data-ng-attr-guid' in tag.attrs)['data-ng-attr-guid']
-      episode = {'description': article.find("div", attrs = {'class' : 'description'}).get_text().encode('ascii', 'ignore'),
-				 'thumbnailURL': article.find('img')['src'],
-				 'pubDate': article.find("div", attrs = {'class' : 'datetime'}).get_text(),
-				 'sources': [{'type':1,'source':article.find(lambda tag: tag.name == 'div' and 'data-address' in tag.attrs)['data-address']}],
-				 'title': article.find("div", attrs = {'class' : 'title'}).get_text(),
-                 'guid' : article.find(lambda tag: tag.name == 'a' and 'data-ng-attr-guid' in tag.attrs)['data-ng-attr-guid'],
-					#'rawdate': 
-                };
-      for gepisode in googleEpisodeList:
-        if episode['guid'] == gepisode['guid']:
-          googleEpisodeList.remove(gepisode)
-          episode['thumbnailURL'] = gepisode['thumbnailURL']
-          #episode['sources'].append({'type':2,'source':gepisode['source']})
-          #print "added source "+gepisode['source']+" on "+episode['guid'] 
-      episodeListArray.append(episode)	
+  
+  
+  if pageData['pub_news_show'] and pageData['pub_news_show']['playlists']:
+    print pageData['pub_news_show']['playlists'][0]['guid']
+    videorawdata = getURL("http://www.msnbc.com/api/1.0/getplaylistcarousel/vertical/"+pageData['pub_news_show']['playlists'][0]['guid']+".json")
+    videojsondata = json.loads(videorawdata)
+   
+    if videojsondata['carousel']:
+      #print videojsondata['carousel'][0]['item']
+      playlistdata = BeautifulSoup(videojsondata['carousel'][0]['item'])
+      articles = playlistdata.findAll("article")
+      print "articles len: "+str(len(articles))
+      for article in articles:
+        if article.find("div", attrs = {'class' : 'title'}).get_text() is not None:
+          
+          description = article.find("div", attrs = {'class' : 'description'}).get_text().encode('ascii', 'ignore')
+          title = article.find("div", attrs = {'class' : 'title'}).get_text()
+          thumbnail = article.find('img')['src']
+          pubdate = article.find("div", attrs = {'class' : 'datetime'}).get_text()
+          sources = [{'type':1,'source':article.find(lambda tag: tag.name == 'div' and 'data-address' in tag.attrs)['data-address']}]
+          guid = article.find(lambda tag: tag.name == 'a' and 'data-ng-attr-guid' in tag.attrs)['data-ng-attr-guid']
+
+          #print "found article "+description +" - "+title+" - "+thumbnail+" - "+pubdate+" - "+str(sources)+" - "+guid
+
+          episode = {'description': description,
+		       'thumbnailURL': thumbnail,
+		       'pubDate': pubdate,
+		       'sources': sources,
+           'title': title ,
+           'guid' : guid,
+			     #'rawdate': 
+                   };
+          for gepisode in googleEpisodeList:
+            if episode['guid'] == gepisode['guid']:
+              googleEpisodeList.remove(gepisode)
+              episode['thumbnailURL'] = gepisode['thumbnailURL']
+              #episode['sources'].append({'type':2,'source':gepisode['source']})
+              #print "added source "+gepisode['source']+" on "+episode['guid'] 
+          episodeListArray.append(episode)	
         
   else:
     raise Exception('pub_news_show first_playlist_html not found')
+    
   for gepisode in googleEpisodeList:
     gepisode['sources'] = [{'type':2,'source':gepisode['source']}]
     episodeListArray.append(gepisode)
@@ -159,12 +182,12 @@ def populateGoogleEpisodes(slug,page):
   urlList = showssoup.findAll("url")
   for urlItem in urlList:
     if urlItem.find("loc").get_text().startswith("http://www.msnbc.com/"+slug):
-      #print urlItem.find("video:publication_date").get_text().split('T')[0]+" "+urlItem.find("loc").get_text() 
+      #print "google found "+urlItem.find("video:publication_date").get_text().split('T')[0]+" "+urlItem.find("loc").get_text() 
       source = urlItem.find("video:player_loc").get_text().replace("player","feed").replace("/p/","/f/").replace("MSNBCEmbeddedOffSite","msnbc_video-p-test").replace("guid","byGuid")+"&form=json"
       datearr = urlItem.find("video:publication_date").get_text().split('T')[0].split("-")
       guid = urlItem.find("video:player_loc").get_text().split("=")[1]
       episodeListArray.append({
-                    'description': urlItem.find("video:description").get_text().encode('ascii', 'ignore'),
+                    'description': urlItem.find("video:description").get_text(),
 					'thumbnailURL': urlItem.find("video:thumbnail_loc").get_text(),
 					'pubDate': datearr[1]+"/"+datearr[2]+"/"+str(int(datearr[0])-2000),
 					'source':source,
@@ -173,8 +196,6 @@ def populateGoogleEpisodes(slug,page):
 					#'rawdate': 
 				})	
         
-  #else:
-  #  raise Exception('pub_news_show first_playlist_html not found')
   return episodeListArray;
 
 def sourcesArrayKey(item):
@@ -234,13 +255,13 @@ def populateSources(slug,dataParam):
       else:
           print jsontext
           raise Exception('someone moved the sources url')
-    #print sourceURL
+    print sourceURL
     #----
     jsontext = getURL(sourceURL)
     pageData = json.loads(jsontext)
     if pageData['entries'] and pageData['entries'][0] and pageData['entries'][0]['media$content']:
       for source in pageData['entries'][0]['media$content']:
-        title = " | ".join(source['plfile$assetTypes'])
+        title = " - ".join(source['plfile$assetTypes'])
         videoData = getURL(source['plfile$url'])
         videoSoup = BeautifulSoup(videoData)
         videos = videoSoup.findAll("video")
@@ -287,21 +308,21 @@ def get_params():
 
 
 
-def addLink(name,url,mode,data,iconimage,description=""):
+def addLink(name,url,mode,data,iconimage):
 	#logging.debug("url:"+url+" ,name:"+name+" ,mode:"+str(mode))
-	addItem(name,url,mode,data,iconimage,"DefaultVideo.png",description)
+	addItem(name,url,mode,data,iconimage,"DefaultVideo.png")
 
-def addDir(name,url,mode,data,iconimage,description=""):
+def addDir(name,url,mode,data,iconimage):
 	#logging.debug("url:"+url+" ,name:"+name+" ,mode:"+str(mode))
-	addItem(name,url,mode,data,iconimage,"DefaultFolder.png",description)
+	addItem(name,url,mode,data,iconimage,"DefaultFolder.png")
 
-def addItem(name,url,mode,data,iconimage,texticon,description=""):
-  u=sys.argv[0]+"?url="+urllib.quote_plus(url.encode(UTF8))+"&mode="+str(mode)+"&name="+urllib.quote_plus(name.encode(UTF8))+"&data="+urllib.quote_plus(data)
-  ok=True
-  liz=xbmcgui.ListItem(label=name,label2=description , iconImage=texticon, thumbnailImage=iconimage)
-  liz.setInfo( type="Video", infoLabels={ "Title": name,"Plot": description } )
-  ok=xbmcplugin.addDirectoryItem(handle=int(sys.argv[1]),url=u,listitem=liz,isFolder=True)
-  return ok
+def addItem(name,url,mode,data,iconimage,texticon):
+        u=sys.argv[0]+"?url="+urllib.quote_plus(url.encode(UTF8))+"&mode="+str(mode)+"&name="+urllib.quote_plus(name.encode(UTF8))+"&data="+urllib.quote_plus(data)
+        ok=True
+        liz=xbmcgui.ListItem(name, iconImage=texticon, thumbnailImage=iconimage)
+        liz.setInfo( type="Video", infoLabels={ "Title": name } )
+        ok=xbmcplugin.addDirectoryItem(handle=int(sys.argv[1]),url=u,listitem=liz,isFolder=True)
+        return ok
         
               
 params=get_params()
