@@ -9,7 +9,7 @@ __plugin__ = "MSNBC Videos"
 __author__ = 'Clarke Hackworth <clarke.hackworth@gmail.com>'
 __url__ = ''
 __date__ = ''
-__version__ = '0.1.7'
+__version__ = '0.1.8'
 UTF8 = 'utf-8'
 
 autoPlay = True
@@ -111,7 +111,9 @@ def addEpisodes(slug,dataParam):
 def populateEpisodes(slug,dataParam):
   print "pop eps: "+slug+" - "+str(dataParam)
   episodeListArray = []
-  googleEpisodeList = populateGoogleEpisodes(slug,1)
+  googleEpisodeList = []
+  #if slug == "Latest Videos":
+  #  googleEpisodeList = populateGoogleEpisodes(slug,1)
   
   
   videorawdata = getURL("http://www.msnbc.com/api/1.0/getplaylistcarousel/vertical/"+dataParam+".json")
@@ -133,7 +135,11 @@ def populateEpisodes(slug,dataParam):
         pubdate = article.find("div", attrs = {'class' : 'datetime'}).get_text()
         sources = [{'type':1,'source':article.find(lambda tag: tag.name == 'div' and 'data-address' in tag.attrs)['data-address']}]
         guid = article.find(lambda tag: tag.name == 'a' and 'data-ng-attr-guid' in tag.attrs)['data-ng-attr-guid']
-        duration = article.find("div", attrs = {'class' : 'duration'}).get_text().replace("Duration: ","")
+        duration = article.find("div", attrs = {'class' : 'duration'})
+        if duration is not None:
+          duration = duration.get_text().replace("Duration: ","")
+        else:
+          duration = ""
 
         #print "found article "+description +" - "+title+" - "+thumbnail+" - "+pubdate+" - "+str(sources)+" - "+guid
 
