@@ -92,13 +92,13 @@ def playAll(slug,dataParam):
 def episodesArrayKey(item):
     try:
        outarray = item['pubDate'].split(' ')[0].split('/')
-       return outarray[2]+outarray[1]+outarray[0]
+       return outarray[2]+outarray[0]+outarray[1]
     except :
        return '700101'
     
 def addEpisodes(slug,dataParam):       
   episodes = populateEpisodes(slug,dataParam)
-  episodes = sorted(episodes, key=episodesArrayKey)
+  episodes = sorted(episodes, key=episodesArrayKey,reverse=True)
   dateList = []
   for ep in episodes:
     if ep['pubDate'] not in dateList:
