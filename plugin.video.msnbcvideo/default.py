@@ -9,7 +9,7 @@ __plugin__ = "MSNBC Videos"
 __author__ = 'Clarke Hackworth <clarke.hackworth@gmail.com>'
 __url__ = ''
 __date__ = ''
-__version__ = '0.1.8'
+__version__ = '0.1.9'
 UTF8 = 'utf-8'
 
 autoPlay = True
@@ -91,13 +91,14 @@ def playAll(slug,dataParam):
 
 def episodesArrayKey(item):
     try:
-       return datetime.datetime.strptime(item['pubDate'], '%m/%d/%y')
+       outarray = item['pubDate'].split(' ')[0].split('/')
+       return outarray[2]+outarray[1]+outarray[0]
     except :
-       return datetime.datetime.strptime('01/01/70', '%m/%d/%y')
+       return '700101'
     
 def addEpisodes(slug,dataParam):       
   episodes = populateEpisodes(slug,dataParam)
-  episodes = sorted(episodes, key=episodesArrayKey,reverse=True)
+  episodes = sorted(episodes, key=episodesArrayKey)
   dateList = []
   for ep in episodes:
     if ep['pubDate'] not in dateList:
