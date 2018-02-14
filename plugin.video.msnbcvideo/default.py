@@ -16,7 +16,7 @@ autoPlay = True
 
 
 def getURL(url):
-	req = urllib2.Request(url)
+    	req = urllib2.Request(url)
         req.add_header('User-Agent', 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-GB; rv:1.9.0.3) Gecko/2008092417 Firefox/3.0.3')
         response = urllib2.urlopen(req)
         resp=response.read()
@@ -25,7 +25,6 @@ def getURL(url):
 
 def populateShows():
   shows = [] 
-  #showsData = json.loads(getURL("http://www.msnbc.com/api/1.0/shows-queue.json"))
   showsData = json.loads(getURL("http://www.msnbc.com/api/1.0/shows.json"))
   
   for show in showsData['shows']:
@@ -77,11 +76,11 @@ def playAll(slug,dataParam):
      
       ##listitem = xbmcgui.ListItem(ep['title'],iconImage=ep['thumbnailURL'])
       url = sources[0]['url']
-      
       icon = "DefaultVideoPlaylists.png"
       liz=xbmcgui.ListItem(ep['title'], iconImage=icon, thumbnailImage=ep['thumbnailURL'])
       liz.setProperty("IsPlayable", "true")
       liz.setInfo( type="Video", infoLabels={ "Title": ep['title'] } )
+      liz.setSubtitles([sources[0]['subtitle']])
     
       xbmcplugin.addDirectoryItem(handle=int(sys.argv[1]), url=url,listitem=liz, isFolder=False)
       xbmc.PlayList(1).add(url, liz)
@@ -122,7 +121,7 @@ def populateEpisodes(slug,dataParam):
    
   if videojsondata['carousel']:
     #print videojsondata['carousel'][0]['item']
-    playlistdata = BeautifulSoup(videojsondata['carousel'][0]['item'])
+    playlistdata = BeautifulSoup(videojsondata['carousel'][0]['item'], 'html.parser')
     articles = playlistdata.findAll("article")
     
     for article in articles:
@@ -176,8 +175,7 @@ def populateGoogleEpisodes(slug,page):
     page=1
   url = "http://www.msnbc.com/msnbc_googlevideos.xml?page="+str(page)
   data = getURL(url)
-  
-  showssoup = BeautifulSoup(data)
+  showssoup = BeautifulSoup(data, "html.parser")
   urlList = showssoup.findAll("url")
   for urlItem in urlList:
     if urlItem.find("loc").get_text().startswith("http://www.msnbc.com/"+slug):
@@ -210,12 +208,9 @@ def populatePlaylists(slug,dataParam):
   
   url = "http://www.msnbc.com/"+slug
   data = getURL(url)
-  
-  #remove the following line from input as it messes with some older versions of Beautiful Soup
-  #document.write('<scr'+'ipt id="mps-ext-load" src="//'+mpsopts.host+'/fetch/ext/load-'+mpscall.site+'.js"></scr'+'ipt>');
   data = re.sub(r"document\.write(.*);", "", data)
   
-  showssoup = BeautifulSoup(data)
+  showssoup = BeautifulSoup(data, 'html.parser')
   scripts = showssoup.findAll("script")
   jsontext = ""
   for script in scripts:
@@ -234,6 +229,7 @@ def sourcesArrayKey(item):
     return int(item['res'])
     
 def addSources(slug,dataParam):
+  print "addSources sources: "+slug+" - "+str(dataParam)
   dataObj = json.loads(dataParam)
   playlist = dataObj['playlist']
   data = dataObj['data']
@@ -241,89 +237,72 @@ def addSources(slug,dataParam):
   sources = populateSources(slug,data)
   sources = sorted(sources, key=sourcesArrayKey,reverse=True)
   for src in sources:	
-    if int(src['res'])>=720:
-      res = " - HQ"
-    else:
-      res = " - LQ"
-    sourceTitle = src['title']+res 
-
+    sourceTitle = src['title']
     li = xbmcgui.ListItem(sourceTitle, iconImage='DefaultVideo.png')
     li.setInfo( type="Video", infoLabels={ "Title": src['slug'] })
+    li.setSubtitles([src['subtitle']])
     xbmcplugin.addDirectoryItem(handle=int(sys.argv[1]), url=src['url'], listitem=li)
-
-
   
 def populateSources(slug,dataParam):
-  print "pop sources: "+slug+" - "+str(dataParam)
+  logging.debug("pop sources: "+slug+" - ")
   sourceListArray = []
+  sources = json.loads(dataParam)  
+  
   
   sources = json.loads(dataParam)  
   for source in sources:
     sourceURL = source['source']
     if source['type'] == 1:
       data = getURL(sourceURL)
-  
-      #remove the following line from input as it messes with some older versions of Beautiful Soup
-      #document.write('<scr'+'ipt id="mps-ext-load" src="//'+mpsopts.host+'/fetch/ext/load-'+mpscall.site+'.js"></scr'+'ipt>');
       data = re.sub(r"document\.write(.*);", "", data)
   
-      showssoup = BeautifulSoup(data)
+      showssoup = BeautifulSoup(data, "html.parser")
       scripts = showssoup.findAll("script")
       jsontext = ""
       for script in scripts:
         text = script.get_text().strip()
-        if text.startswith("jQuery.extend(Drupal.settings,"):
-          jsontext = text.replace("jQuery.extend(Drupal.settings,","").replace(");","")
+        if text.startswith("window.__data="):
+          jsontext = text.replace("window.__data=","").replace("};","}")
       if jsontext == '':
         print data
         raise Exception('someone moved the drupal settings json')
       pageData = json.loads(jsontext)
       sourceURL = ''
-      if pageData['msnbcVideoInfo']:
-        if pageData['msnbcVideoInfo']['feed'] and \
-          pageData['msnbcVideoInfo']['feed']['url'] and \
-          pageData['msnbcVideoInfo']['meta'] and \
-          pageData['msnbcVideoInfo']['meta']['guid']:
-          sourceURL = pageData['msnbcVideoInfo']['feed']['url']+pageData['msnbcVideoInfo']['meta']['guid']
-        else:
-          print jsontext
-          raise Exception('someone moved the sources url')
+
+      if pageData['video']:
+        if pageData['video']['current']['videoAssets']:
+          pageUrl = pageData['video']['current']['videoAssets'][0]['publicUrl']
+          titleBase = pageData['video']['current']['headline']['primary']
+          #logging.debug(title+' '+pageUrl)
+          data = getURL(pageUrl)
+          #logging.debug(data)
+          
+          videoSoup = BeautifulSoup(data, 'html.parser')
+          videos = videoSoup.findAll("video")
+          subTags = videoSoup.findAll("textstream")[0]['src']
+          logging.debug(subTags)
+
+          logging.debug("subs: " + subTags)
+          for video in videos:
+            height = "0"
+            src=''
+            if video.has_attr('height'):
+              height = video['height']
+              title = titleBase + ' ' + str(height)
+            if video.has_attr('src'):
+              src=video['src']
+              logging.debug(src)
+              sourceListArray.append({
+                'slug': slug,
+                'title': title,
+                'url' : src,
+                'res': height,
+                'subtitle': subTags
+                })
       else:
-          print jsontext
-          raise Exception('someone moved the sources url')
-    print sourceURL
-    #----
-    jsontext = getURL(sourceURL)
-    pageData = json.loads(jsontext)
-    if pageData['entries'] and pageData['entries'][0] and pageData['entries'][0]['media$content']:
-      for source in pageData['entries'][0]['media$content']:
-        title = " - ".join(source['plfile$assetTypes'])
-        videoData = getURL(source['plfile$url'])
-        videoSoup = BeautifulSoup(videoData)
-        videos = videoSoup.findAll("video")
-        for video in videos:
-          #print video
-          height = "0"
-          src=''
-          if video.has_attr('height'):
-            height = video['height']
-          if video.has_attr('src'):
-            src= video['src']
-            sourceListArray.append({
-              'slug':slug,
-              'title': title,
-              'url' : src,
-              'res': height
-              });
-    else:
-      print jsontext
-      raise Exception('someone moved the media content')
+        raise Exception('cant find video location data')
   return sourceListArray
        
-
-
-	
- 
 def get_params():
         param=[]
         paramstring=sys.argv[2]
@@ -345,11 +324,11 @@ def get_params():
 
 
 def addLink(name,url,mode,data,iconimage):
-	#logging.debug("url:"+url+" ,name:"+name+" ,mode:"+str(mode))
+	#logging.debug("addLink url:"+url+" ,name:"+name+" ,mode:"+str(mode))
 	addItem(name,url,mode,data,iconimage,"DefaultVideo.png")
 
 def addDir(name,url,mode,data,iconimage):
-	#logging.debug("url:"+url+" ,name:"+name+" ,mode:"+str(mode))
+	#logging.debug("addDir: url"+url+" ,name:"+name+" ,mode:"+str(mode))
 	addItem(name,url,mode,data,iconimage,"DefaultFolder.png")
 
 def addItem(name,url,mode,data,iconimage,texticon):
@@ -357,6 +336,7 @@ def addItem(name,url,mode,data,iconimage,texticon):
         ok=True
         liz=xbmcgui.ListItem(name, iconImage=texticon, thumbnailImage=iconimage)
         liz.setInfo( type="Video", infoLabels={ "Title": name } )
+        
         ok=xbmcplugin.addDirectoryItem(handle=int(sys.argv[1]),url=u,listitem=liz,isFolder=True)
         return ok
         
@@ -417,7 +397,3 @@ elif mode==4:
   #logging.debug("url:"+url+",mode:"+str(mode))
   playAll(url,data)
   xbmcplugin.endOfDirectory(int(sys.argv[1]))
-
-
-
-
