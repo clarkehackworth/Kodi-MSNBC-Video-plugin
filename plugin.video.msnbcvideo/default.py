@@ -279,7 +279,9 @@ def populateSources(slug,dataParam):
           
           videoSoup = BeautifulSoup(data, 'html.parser')
           videos = videoSoup.findAll("video")
-          subTags = videoSoup.findAll("textstream")[0]['src']
+          subTags = videoSoup.findAll("textstream")
+          if len(subTags)>0:
+             subTag = subTags[0]['src']
           logging.debug(subTags)
 
           logging.debug("subs: " + subTags)
