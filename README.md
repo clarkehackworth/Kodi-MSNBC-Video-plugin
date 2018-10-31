@@ -1,4 +1,4 @@
-# Kodi-MSNBC-Video-plugin
+# Kodi-MSNBC-Video-plugin (this plugin has been deprecated because MSNBC site changes has made it not work properly)
 
 Watch all your favorite MSNBC news shows from Kodi!
 
